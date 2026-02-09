@@ -17,10 +17,14 @@ if not exist "C:\ffmpeg" (
     echo 警告: FFmpeg 未找到
     echo.
     echo 请按照以下步骤安装 FFmpeg:
-    echo 1. 下载: https://ffmpeg.org/download.html
-    echo 2. 解压到: C:\ffmpeg
-    echo 3. 添加环境变量 FFMPEG_PATH=C:\ffmpeg
-    echo 4. 运行此脚本
+    echo   方式 1 (推荐): 运行安装脚本
+    echo     powershell -ExecutionPolicy Bypass -File install-ffmpeg.ps1
+    echo.
+    echo   方式 2: 手动安装
+    echo     1. 下载: https://ffmpeg.org/download.html
+    echo     2. 解压到: C:\ffmpeg
+    echo     3. 添加环境变量 FFMPEG_PATH=C:\ffmpeg
+    echo     4. 运行此脚本
     echo.
     pause
     exit /b 1
