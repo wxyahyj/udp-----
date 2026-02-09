@@ -11,63 +11,108 @@ on:
 
 jobs:
   build-windows-cpp:
-    name: Build C++ on Windows
+    name: Build C++ on Windows (x64)
     runs-on: windows-latest
-    strategy:
-      matrix:
-        arch: [x64, x86]
     
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
     
-    - name: Setup CMake
+    - name: Setup CMake and Dependencies
       run: |
         choco install cmake --no-progress -y
         cmake --version
       shell: powershell
     
-    - name: Setup Visual Studio
+    - name: Setup Visual Studio Build Tools
       uses: microsoft/setup-msbuild@v1.1
     
-    - name: Download FFmpeg
+    - name: Download FFmpeg (Pre-built)
       run: |
         $ProgressPreference = 'SilentlyContinue'
-        Invoke-WebRequest -Uri "https://www.gyan.dev/ffmpeg/builds/ffmpeg-release-full-shared.zip" `
-          -OutFile "ffmpeg.zip"
-        Expand-Archive -Path "ffmpeg.zip" -DestinationPath "."
-        dir
+        Write-Host "Downloading FFmpeg..."
+        $ffmpeg_url = "https://www.gyan.dev/ffmpeg/builds/ffmpeg-release-full-dev.zip"
+        Invoke-WebRequest -Uri $ffmpeg_url -OutFile "ffmpeg.zip" -MaximumRetryCount 3
+        
+        Write-Host "Extracting FFmpeg..."
+        Expand-Archive -Path "ffmpeg.zip" -DestinationPath "." -Force
+        
         $ffmpeg_dir = Get-ChildItem -Directory -Filter "ffmpeg*" | Select-Object -First 1
-        echo "FFMPEG_PATH=$($ffmpeg_dir.FullName)" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
-      shell: pwsh
+        if (-not $ffmpeg_dir) {
+          Write-Host "ERROR: FFmpeg directory not found"
+          exit 1
+        }
+        
+        $ffmpeg_path = $ffmpeg_dir.FullName
+        Write-Host "FFmpeg path: $ffmpeg_path"
+        echo "FFMPEG_PATH=$ffmpeg_path" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+      shell: powershell
+    
+    - name: Verify FFmpeg
+      run: |
+        Write-Host "Checking FFmpeg structure..."
+        $ffmpeg = "${{ env.FFMPEG_PATH }}"
+        Get-ChildItem "$ffmpeg" -Recurse -Filter "*.lib" | Select-Object -First 5
+        Get-ChildItem "$ffmpeg" -Recurse -Filter "*.h" | Select-Object -First 5
+      shell: powershell
     
     - name: Configure CMake
       run: |
-        mkdir build
+        mkdir build -ErrorAction SilentlyContinue
         cd build
-        cmake -G "Visual Studio 17 2022" -A ${{ matrix.arch }} `
-          -DFFMPEG_INCLUDE_DIRS="${{ env.FFMPEG_PATH }}\include" `
-          -DFFMPEG_LIBRARIES="${{ env.FFMPEG_PATH }}\lib\avcodec.lib;${{ env.FFMPEG_PATH }}\lib\avformat.lib;${{ env.FFMPEG_PATH }}\lib\swscale.lib" `
+        
+        $ffmpeg_path = "${{ env.FFMPEG_PATH }}"
+        Write-Host "Configuring with FFmpeg path: $ffmpeg_path"
+        
+        cmake -G "Visual Studio 17 2022" `
+          -A x64 `
+          -DFFMPEG_PATH="$ffmpeg_path" `
+          -DCMAKE_BUILD_TYPE=Release `
           ..
-      shell: cmd
+        
+        if ($LASTEXITCODE -ne 0) {
+          Write-Host "CMake configuration failed"
+          exit 1
+        }
+      shell: powershell
     
-    - name: Build
+    - name: Build C++ Project
       run: |
         cd build
-        cmake --build . --config Release
-      shell: cmd
+        cmake --build . --config Release --parallel 4
+        
+        if ($LASTEXITCODE -ne 0) {
+          Write-Host "Build failed"
+          exit 1
+        }
+      shell: powershell
     
     - name: Copy FFmpeg DLLs
       run: |
-        Copy-Item "${{ env.FFMPEG_PATH }}\bin\*.dll" "build\Release\" -Force
-      shell: pwsh
+        $src = "${{ env.FFMPEG_PATH }}\bin"
+        $dst = "build\Release"
+        
+        if (Test-Path $src) {
+          Write-Host "Copying FFmpeg DLLs from $src to $dst"
+          Copy-Item "$src\*.dll" "$dst\" -Force -ErrorAction SilentlyContinue
+        }
+        
+        if (Test-Path "build\Release\udp_streamer.exe") {
+          Write-Host "✓ Executable created successfully"
+          Get-Item "build\Release\udp_streamer.exe"
+        } else {
+          Write-Host "✗ Executable not found"
+          exit 1
+        }
+      shell: powershell
     
     - name: Upload artifacts
       uses: actions/upload-artifact@v4
       with:
-        name: udp-streamer-cpp-windows-${{ matrix.arch }}
+        name: udp-streamer-cpp-windows-x64
         path: build/Release/udp_streamer.exe
         retention-days: 30
+        if-no-files-found: error
     
     - name: Create Release
       if: startsWith(github.ref, 'refs/tags/v')
@@ -80,146 +125,7 @@ jobs:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
 
-  build-python:
-    name: Build Python Package
-    runs-on: ubuntu-latest
-    
-    steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
-    
-    - name: Set up Python
-      uses: actions/setup-python@v4
-      with:
-        python-version: '3.10'
-        cache: 'pip'
-    
-    - name: Install dependencies
-      run: |
-        python -m pip install --upgrade pip
-        pip install -r requirements.txt
-        pip install pyinstaller
-    
-    - name: Build standalone executable (Linux)
-      run: |
-        pyinstaller --onefile --name udp_streamer \
-          --hidden-import=cv2 \
-          --hidden-import=mss \
-          --collect-all cv2 \
-          udp_streamer.py
-    
-    - name: Upload Linux artifact
-      uses: actions/upload-artifact@v4
-      with:
-        name: udp-streamer-python-linux
-        path: dist/udp_streamer
-        retention-days: 30
 
-
-  build-python-windows:
-    name: Build Python Package for Windows
-    runs-on: windows-latest
-    
-    steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
-    
-    - name: Set up Python
-      uses: actions/setup-python@v4
-      with:
-        python-version: '3.10'
-        cache: 'pip'
-    
-    - name: Install dependencies
-      run: |
-        python -m pip install --upgrade pip
-        pip install -r requirements.txt
-        pip install pyinstaller
-    
-    - name: Build standalone executable
-      run: |
-        pyinstaller --onefile --name udp_streamer.exe `
-          --hidden-import=cv2 `
-          --hidden-import=mss `
-          --collect-all cv2 `
-          udp_streamer.py
-    
-    - name: Upload Windows artifact
-      uses: actions/upload-artifact@v4
-      with:
-        name: udp-streamer-python-windows
-        path: dist/udp_streamer.exe
-        retention-days: 30
-    
-    - name: Create Release
-      if: startsWith(github.ref, 'refs/tags/v')
-      uses: softprops/action-gh-release@v1
-      with:
-        files: dist/udp_streamer.exe
-        draft: false
-        prerelease: false
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-
-  build-docker:
-    name: Build Docker Image
-    runs-on: ubuntu-latest
-    
-    steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
-    
-    - name: Set up Docker Buildx
-      uses: docker/setup-buildx-action@v3
-    
-    - name: Build Docker image
-      uses: docker/build-push-action@v5
-      with:
-        context: .
-        push: false
-        tags: udp-streamer:test
-    
-    - name: Create Release (Docker)
-      if: startsWith(github.ref, 'refs/tags/v')
-      uses: softprops/action-gh-release@v1
-      with:
-        body: |
-          Docker image built successfully.
-          
-          Instructions:
-          ```bash
-          docker build -t udp-streamer:${{ github.ref_name }} .
-          docker run -it --rm udp-streamer:${{ github.ref_name }} \
-            -ip 192.168.1.100 -p 10000
-          ```
-        draft: false
-        prerelease: false
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-
-  test-cpp:
-    name: Test C++ Build
-    runs-on: windows-latest
-    needs: build-windows-cpp
-    
-    steps:
-    - name: Download C++ artifact
-      uses: actions/download-artifact@v4
-      with:
-        name: udp-streamer-cpp-windows-x64
-    
-    - name: Check executable
-      run: |
-        if (Test-Path "udp_streamer.exe") {
-          Write-Host "✓ Executable built successfully"
-          & ".\udp_streamer.exe" --help 2>&1 | head -5
-        } else {
-          Write-Host "✗ Executable not found"
-          exit 1
-        }
-      shell: pwsh
 
 
   release:
