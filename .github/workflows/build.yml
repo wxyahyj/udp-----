@@ -132,7 +132,7 @@ jobs:
     name: Create Release
     runs-on: ubuntu-latest
     if: startsWith(github.ref, 'refs/tags/v')
-    needs: [build-windows-cpp, build-python, build-python-windows, build-docker]
+    needs: [build-windows-cpp]
     
     steps:
     - name: Checkout code
@@ -144,31 +144,16 @@ jobs:
     - name: Create Release Notes
       run: |
         cat > RELEASE_NOTES.md << 'EOF'
-        # UDP Streamer Release
+        # UDP Streamer Release (Windows x64)
         
         ## Downloads
         
         - **Windows C++ (x64)**: udp-streamer-cpp-windows-x64/udp_streamer.exe
-        - **Windows C++ (x86)**: udp-streamer-cpp-windows-x86/udp_streamer.exe
-        - **Windows Python**: udp-streamer-python-windows/udp_streamer.exe
-        - **Linux Python**: udp-streamer-python-linux/udp_streamer
         
         ## Usage
         
-        ### C++ Version
         ```bash
         udp_streamer.exe -ip 192.168.1.100 -p 10000 -w 1920 -h 1080 -fps 30 -br 5000
-        ```
-        
-        ### Python Version
-        ```bash
-        udp_streamer.exe -ip 192.168.1.100 -p 10000 --help
-        ```
-        
-        ### Docker
-        ```bash
-        docker pull ${{ secrets.DOCKER_USERNAME }}/udp-streamer:${{ github.ref_name }}
-        docker run -it --rm ${{ secrets.DOCKER_USERNAME }}/udp-streamer:${{ github.ref_name }}
         ```
         
         ## Changes
