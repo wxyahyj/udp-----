@@ -1,0 +1,23 @@
+version: '3.8'
+
+services:
+  udp-streamer:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: udp-streamer
+    environment:
+      - DISPLAY=:99
+    ports:
+      - "10000:10000/udp"
+    volumes:
+      - /tmp/.X11-unix:/tmp/.X11-unix:rw
+    command: >
+      python3 udp_streamer.py
+      -ip 0.0.0.0
+      -p 10000
+      -w 1920
+      -h 1080
+      -fps 30
+      -br 5000
+    restart: unless-stopped

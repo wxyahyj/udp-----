@@ -1,0 +1,159 @@
+====================================
+UDP 推流发射器 - 快速开始指南
+====================================
+
+该项目提供两个版本的实现：
+1. C++ 高性能版本 (推荐生产使用)
+2. Python 快速测试版本
+
+
+【方案一】Python 版本 (快速开始)
+====================================
+
+前置条件:
+  • Python 3.8+
+  • FFmpeg (需要在 PATH 中)
+  • OpenCV: pip install opencv-python
+  • mss: pip install mss (可选，用于高性能屏幕捕获)
+
+安装依赖:
+  pip install opencv-python numpy
+
+运行:
+  python udp_streamer.py -ip 192.168.1.100 -p 10000
+
+参数:
+  -w, --width       分辨率宽度 (默认: 1920)
+  -h, --height      分辨率高度 (默认: 1080)
+  -fps              帧率 (默认: 30)
+  -br, --bitrate    码率 kbps (默认: 5000)
+  -ip, --ip         目标 IP (默认: 127.0.0.1)
+  -p, --port        目标端口 (默认: 10000)
+  --cpu             使用 CPU 编码 (默认使用 GPU)
+
+性能优化建议:
+  • GPU 编码: python udp_streamer.py -br 8000
+  • 低延迟: python udp_streamer.py -fps 60 -br 4000
+  • CPU 编码: python udp_streamer.py --cpu -br 2000
+
+
+【方案二】C++ 版本 (高性能)
+====================================
+
+前置条件:
+  • Visual Studio 2022+ 或 MinGW
+  • CMake 3.10+
+  • FFmpeg 开发库
+  • Windows SDK
+
+FFmpeg 安装:
+  1. 下载: https://ffmpeg.org/download.html
+  2. 解压到 C:\ffmpeg
+  3. 确保包含以下文件:
+     C:\ffmpeg\include\  (头文件)
+     C:\ffmpeg\lib\      (库文件: avcodec.lib, avformat.lib, swscale.lib)
+
+编译:
+  双击运行: build.bat
+  或手动:
+    mkdir build && cd build
+    cmake -G "Visual Studio 17 2022" -A x64 ^
+      -DFFMPEG_INCLUDE_DIRS="C:\ffmpeg\include" ^
+      -DFFMPEG_LIBRARIES="C:\ffmpeg\lib\avcodec.lib;C:\ffmpeg\lib\avformat.lib;C:\ffmpeg\lib\swscale.lib" ^
+      ..
+    cmake --build . --config Release
+
+运行:
+  build\Release\udp_streamer.exe -ip 192.168.1.100 -p 10000
+
+参数同上
+
+性能特点:
+  ✓ 原生硬件编码 (NVIDIA H.264/H.265, AMD VCE)
+  ✓ 多线程管道 (捕获/编码/发送分离)
+  ✓ 超低延迟 (<50ms)
+  ✓ 高帧率支持 (60fps+)
+  ✓ 自适应码率控制
+
+
+【OBS 接收配置】
+====================================
+
+在 OBS 中添加媒体源:
+  1. 场景 -> 添加媒体源
+  2. 媒体源 -> 新建 -> 选择本地文件
+  3. 选择接收的推流文件或使用 VLC
+
+或使用 FFplay 接收:
+  ffplay -protocol_whitelist file,udp,rtp -i "udp://127.0.0.1:10000"
+
+或使用 vlc 接收:
+  vlc udp://@:10000
+
+
+【性能优化建议】
+====================================
+
+延迟优化:
+  • 启用 GPU 硬件编码 (C++ 版本默认)
+  • 减少 GOP 大小: 等于帧率 (1秒关键帧)
+  • 禁用 B 帧 (已配置)
+  • 增加码率: 减少压缩
+
+帧率优化:
+  • 增加本地编码线程
+  • 使用 ultrafast 预设
+  • 启用零延迟模式
+  • 减少分辨率测试
+
+码率优化:
+  • 分辨率调整建议:
+    480p @ 30fps: 1500-3000 kbps
+    720p @ 30fps: 3000-5000 kbps
+    1080p @ 30fps: 5000-8000 kbps
+    1080p @ 60fps: 8000-12000 kbps
+
+
+【常见问题】
+====================================
+
+Q: 推流延迟大
+A: 1. 使用 GPU 硬件编码 (h264_nvenc)
+   2. 增加码率到 8000 kbps
+   3. 减少分辨率
+   4. 升级显卡驱动
+
+Q: 帧率低
+A: 1. 使用 C++ 版本 (性能更高)
+   2. 启用 GPU 编码
+   3. 降低分辨率
+   4. 关闭其他耗资源程序
+
+Q: 找不到 FFmpeg
+A: 1. 下载 FFmpeg: https://ffmpeg.org/download.html
+   2. 解压到 C:\ffmpeg
+   3. 添加到 PATH: setx PATH "%PATH%;C:\ffmpeg\bin"
+   4. 重启命令行
+
+Q: GPU 编码不工作
+A: 1. 检查显卡驱动是否最新
+   2. NVIDIA: 需要 GeForce Game Ready Driver 或更新
+   3. AMD: 需要 Radeon 驱动 21.0+
+   4. 使用 CPU 编码作为备选
+
+
+【联系和支持】
+====================================
+
+项目文件结构:
+  /src/
+    main.cpp           主程序入口
+    screen_capture.*   屏幕捕获
+    encoder.*         视频编码
+    udp_streamer.*    UDP 推流
+  /CMakeLists.txt     CMake 配置
+  /build.bat          编译脚本
+  /udp_streamer.py    Python 版本
+
+
+更多信息请参考源代码中的注释。
