@@ -32,19 +32,52 @@ jobs:
         $ProgressPreference = 'SilentlyContinue'
         Write-Host "Downloading FFmpeg with ghproxy mirror..."
         
-        # Use ghproxy to accelerate GitHub downloads from China
         $url = "https://ghproxy.com/https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-master-latest-win64-dev.zip"
+        $ffmpegZip = "ffmpeg.zip"
+        $maxRetries = 3
+        $retryCount = 0
+        $downloadSuccess = $false
         
-        try {
-          Invoke-WebRequest -Uri $url -OutFile ffmpeg.zip -TimeoutSec 300
-          Write-Host "Download successful"
-        } catch {
-          Write-Host "Download failed: $_"
+        while ($retryCount -lt $maxRetries -and -not $downloadSuccess) {
+          $retryCount++
+          Write-Host "Download attempt $retryCount/$maxRetries..."
+          
+          try {
+            Invoke-WebRequest -Uri $url -OutFile $ffmpegZip -TimeoutSec 300 -UseBasicParsing
+            
+            $fileSize = (Get-Item $ffmpegZip).Length
+            Write-Host "Downloaded file size: $([math]::Round($fileSize/1MB, 2)) MB"
+            
+            if ($fileSize -gt 50MB) {
+              Write-Host "Download successful"
+              $downloadSuccess = $true
+            } else {
+              Write-Host "Downloaded file is too small, may be corrupted"
+              Remove-Item $ffmpegZip -Force -ErrorAction SilentlyContinue
+            }
+          } catch {
+            Write-Host "Download failed: $_"
+            Remove-Item $ffmpegZip -Force -ErrorAction SilentlyContinue
+          }
+        }
+        
+        if (-not $downloadSuccess) {
+          Write-Host "Failed to download FFmpeg after $maxRetries attempts"
           exit 1
         }
         
         Write-Host "Extracting FFmpeg..."
-        Expand-Archive -Path ffmpeg.zip -DestinationPath . -Force
+        try {
+          Add-Type -AssemblyName System.IO.Compression.FileSystem
+          [System.IO.Compression.ZipFile]::ExtractToDirectory($ffmpegZip, ".")
+          Write-Host "Extraction successful"
+        } catch {
+          Write-Host "Extraction failed: $_"
+          Remove-Item $ffmpegZip -Force -ErrorAction SilentlyContinue
+          exit 1
+        }
+        
+        Remove-Item $ffmpegZip -Force -ErrorAction SilentlyContinue
         
         $dir = Get-ChildItem -Directory -Filter "ffmpeg*" | Select-Object -First 1
         if (-not $dir) {
