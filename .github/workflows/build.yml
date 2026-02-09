@@ -30,9 +30,10 @@ jobs:
     - name: Download FFmpeg
       run: |
         $ProgressPreference = 'SilentlyContinue'
-        Write-Host "Downloading FFmpeg with ghproxy mirror..."
+        Write-Host "Downloading FFmpeg..."
         
-        $url = "https://ghproxy.com/https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-master-latest-win64-dev.zip"
+        # Use reliable FFmpeg build from gyan.dev
+        $url = "https://www.gyan.dev/ffmpeg/builds/ffmpeg-release-full-dev.zip"
         $ffmpegZip = "ffmpeg.zip"
         $maxRetries = 3
         $retryCount = 0
