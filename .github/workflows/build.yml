@@ -27,22 +27,34 @@ jobs:
     - name: Setup Visual Studio Build Tools
       uses: microsoft/setup-msbuild@v1.1
     
-    - name: Setup vcpkg and install FFmpeg
+    - name: Download FFmpeg
       run: |
-        # Install vcpkg
-        cd C:\
-        git clone https://github.com/Microsoft/vcpkg.git
-        cd vcpkg
-        .\bootstrap-vcpkg.bat
+        $ProgressPreference = 'SilentlyContinue'
+        Write-Host "Downloading FFmpeg with ghproxy mirror..."
         
-        # Install FFmpeg dev libs
-        .\vcpkg install ffmpeg:x64-windows
+        # Use ghproxy to accelerate GitHub downloads from China
+        $url = "https://ghproxy.com/https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-master-latest-win64-dev.zip"
         
-        # Set FFmpeg path
-        $ffmpeg_path = "C:\vcpkg\installed\x64-windows"
-        Write-Host "FFmpeg path: $ffmpeg_path"
-        Add-Content -Path $env:GITHUB_ENV -Value "FFMPEG_PATH=$ffmpeg_path"
-        Add-Content -Path $env:GITHUB_ENV -Value "VCPKG_ROOT=C:\vcpkg"
+        try {
+          Invoke-WebRequest -Uri $url -OutFile ffmpeg.zip -TimeoutSec 300
+          Write-Host "Download successful"
+        } catch {
+          Write-Host "Download failed: $_"
+          exit 1
+        }
+        
+        Write-Host "Extracting FFmpeg..."
+        Expand-Archive -Path ffmpeg.zip -DestinationPath . -Force
+        
+        $dir = Get-ChildItem -Directory -Filter "ffmpeg*" | Select-Object -First 1
+        if (-not $dir) {
+          Write-Host "ERROR: FFmpeg directory not found"
+          exit 1
+        }
+        
+        $path = $dir.FullName
+        Write-Host "FFmpeg path: $path"
+        Add-Content -Path $env:GITHUB_ENV -Value "FFMPEG_PATH=$path"
       shell: powershell
     
     - name: Verify FFmpeg
@@ -58,10 +70,11 @@ jobs:
         mkdir build -ErrorAction SilentlyContinue
         cd build
         
-        Write-Host "Using vcpkg toolchain"
+        $ffmpeg_path = "${{ env.FFMPEG_PATH }}"
+        Write-Host "Configuring with FFmpeg path: $ffmpeg_path"
+        
         cmake -G "Visual Studio 17 2022" -A x64 `
-          -DCMAKE_TOOLCHAIN_FILE="$env:VCPKG_ROOT\scripts\buildsystems\vcpkg.cmake" `
-          -DVCPKG_TARGET_TRIPLET="x64-windows" `
+          -DFFMPEG_PATH="$ffmpeg_path" `
           -DCMAKE_BUILD_TYPE=Release `
           ..
         
@@ -84,17 +97,14 @@ jobs:
     
     - name: Copy FFmpeg DLLs
       run: |
-        $src = "C:\vcpkg\installed\x64-windows\bin"
+        $src = "${{ env.FFMPEG_PATH }}\bin"
         $dst = "build\Release"
         
         if (Test-Path $src) {
           Write-Host "Copying FFmpeg DLLs from $src to $dst"
-          Copy-Item "$src\avcodec*.dll" "$dst\" -Force -ErrorAction SilentlyContinue
-          Copy-Item "$src\avformat*.dll" "$dst\" -Force -ErrorAction SilentlyContinue
-          Copy-Item "$src\avutil*.dll" "$dst\" -Force -ErrorAction SilentlyContinue
-          Copy-Item "$src\swscale*.dll" "$dst\" -Force -ErrorAction SilentlyContinue
+          Copy-Item "$src\*.dll" "$dst\" -Force -ErrorAction SilentlyContinue
         } else {
-          Write-Host "Warning: FFmpeg bin directory not found"
+          Write-Host "Warning: FFmpeg bin directory not found at $src"
         }
         
         if (Test-Path "build\Release\udp_streamer.exe") {
