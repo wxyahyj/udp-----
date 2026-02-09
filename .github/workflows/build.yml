@@ -32,7 +32,7 @@ jobs:
         $ProgressPreference = 'SilentlyContinue'
         Write-Host "Downloading FFmpeg..."
         $ffmpeg_url = "https://www.gyan.dev/ffmpeg/builds/ffmpeg-release-full-dev.zip"
-        Invoke-WebRequest -Uri $ffmpeg_url -OutFile "ffmpeg.zip" -MaximumRetryCount 3
+        Invoke-WebRequest -Uri $ffmpeg_url -OutFile "ffmpeg.zip"
         
         Write-Host "Extracting FFmpeg..."
         Expand-Archive -Path "ffmpeg.zip" -DestinationPath "." -Force
